@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    "incremental": true,
+    "target": "es3",
+    "module": "esnext",
+    "lib": ["esnext"],
+    "declaration": true,
+    "sourceMap": true,
+    "outDir": "lib",
+    "strict": true,
+    "moduleResolution": "node",
+    "baseUrl": "./",
+    "paths": {
+      "@/*": [ "./src/*" ],
+      "@controls/*": [ "./src/controls/*" ],
+    },
+    "esModuleInterop": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "plugins": [
+      { "transform": "typescript-transform-paths" },
+      { "transform": "typescript-transform-paths", "afterDeclarations": true }
+    ]
+  },
+  "exclude": [
+    "node_modules",
+    "build",
+    "lib",
+    "dist",
+    "gulpfile.ts"
+  ]
+}
