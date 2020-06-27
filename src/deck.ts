@@ -3,6 +3,7 @@ import { DeckMidiControl } from "@controls/deckMidiControl";
 import { DeckFineMidiControl } from "@controls/deckFineMidiControl";
 import { DeckButton } from "@controls/deckButton";
 import { log, toggleControl, activate, makeLedConnection, clamp } from "@/utils";
+import { MidiMapping } from "./midiMapping";
 
 export class Deck {
     public readonly index: number;
@@ -10,6 +11,7 @@ export class Deck {
     private readonly connections: Connection[] = [];
     private readonly group: string;
 
+    private readonly hotcue2: DeckButton;
     private readonly hotcue3: DeckButton;
 
     constructor(readonly channel: number) {
@@ -40,11 +42,6 @@ export class Deck {
             new DeckButton(this.index, "LoopButton", {
                 onPressed: () => {
                     this.activate(`beatloop_${this.getValue("beatloop_size")}_toggle`);
-                }
-            }),
-            new DeckMidiControl(this.index, "LoopEncoderShifted", {
-                onNewValue: value => {
-                    this.activate(value > 0x40 ? "loop_halve" : "loop_double");
                 }
             }),
 
@@ -88,8 +85,10 @@ export class Deck {
             new DeckButton(this.index, "LoopEncoder", {
                 onNewValue: value => {
                     const forward = value > 0x40;
-                    if (this.hotcue3.lastValue > 0) {
+                    if (this.hotcue2.lastValue > 0) {
                         this.modifyAndClampBeatjumpSize(forward ? 0.5 : 2);
+                    } else if (this.hotcue3.lastValue > 0) {
+                        this.activate(forward ? "loop_halve" : "loop_double");
                     } else {
                         this.activate(forward ? "beatjump_backward" : "beatjump_forward");
                     }
@@ -105,21 +104,37 @@ export class Deck {
         
 
         // Jog wheel
-        const jogTouchVariants = [ "JogTouchButton", "JogTouchButtonShifted" ];
+        function scratchEnable() {
+            const alpha = 1.0 / 8;
+            const beta = alpha / 32;
+            engine.scratchEnable(channel, 512, 33 + 1 / 3, alpha, beta, true);
+        }
+
+        function scratchDisable() {
+            engine.scratchDisable(channel, true);
+        }
+
+        const jogTouchButton = "JogTouchButton";
+        const jogTouchButtonShifted = "JogTouchButtonShifted";
+        const jogTouchVariants = [ jogTouchButton, jogTouchButtonShifted ];
+
+        let jogTouchButtonIgnoreNextRelease = false;
         for (const jogTouchVariant of jogTouchVariants) {
             this.controls.push(new DeckButton(this.index, jogTouchVariant, {
+                // This has a weird shift state:
+                // Use onNewValue instead of onPressed because the shifted jog touch event only fires values of 0x7F.
+                // It never fires for 0x00, which means that onValueChanged (used for onPressed) also never fires.
+                // And we have to use the unshifted release event which fires even while pressing shift.
                 onNewValue: value => {
-                    // this has a weird shift state:
-                    // use onNewValue instead of onPressed because the shifted jog touch event only fires values of 0x7F
-                    // it never fires for 0x00, which means that onValueChanged (used for onPressed) also never fires
                     if (value > 0) {
-                        const alpha = 1.0 / 8;
-                        const beta = alpha / 32;
-                        engine.scratchEnable(this.channel, 512, 33 + 1 / 3, alpha, beta, true);
+                        scratchEnable();
+                        jogTouchButtonIgnoreNextRelease = jogTouchVariant == jogTouchButtonShifted;
+                    } else if (!jogTouchButtonIgnoreNextRelease) {
+                        scratchDisable();
+                    } else {
+                        // released button but the event was ignored -> turn off the ignore to accept the next event
+                        jogTouchButtonIgnoreNextRelease = false;
                     }
-                },
-                onReleased: () => {
-                    engine.scratchDisable(this.channel, true);
                 }
             }));
         }
@@ -149,34 +164,28 @@ export class Deck {
             
         }
 
+        this.hotcue2 = new DeckButton(this.index, "Hotcue2", { });
         this.hotcue3 = new DeckButton(this.index, "Hotcue3", { });
+
+        this.controls.push(this.hotcue2);
         this.controls.push(this.hotcue3);
 
         // Hotcues
-/*         for (let hotcuethis.index = 0; hotcuethis.index < 4; hotcuethis.index++) {
-            const hotcueNumber = hotcuethis.index + 1;
-            const padMidiNo = 0x00 + hotcuethis.index;
-            const shiftedpadMidiNo = padMidiNo + Deck.padShiftOffset;
+        const hotcueIndices = [0, 1];
+        for (const hotcueIndex of hotcueIndices) {
+            const hotcueNumber = hotcueIndex + 1;
 
-            this.controls.push(new DeckButton(padStatus, padMidiNo, {
+            this.controls.push(new DeckButton(this.index, `Hotcue${hotcueIndex}`, {
                 onValueChanged: pressed => {
                     this.setValue(`hotcue_${hotcueNumber}_activate`, pressed);
                 }
             }));
-            this.controls.push(new DeckButton(padStatus, shiftedpadMidiNo, {
+            this.controls.push(new DeckButton(this.index, `Hotcue${hotcueIndex}Shifted`, {
                 onPressed: () => {
                     this.activate(`hotcue_${hotcueNumber}_clear`);
                 }
             }));
-
-            this.makeConnection(`hotcue_${hotcueNumber}_enabled`, enabled => {
-                midi.sendShortMsg(padLedStatusWithBase, padMidiNo, Deck.hotcueGreen * enabled);
-                midi.sendShortMsg(padLedStatusWithBase, shiftedpadMidiNo, Deck.hotcueDeleteRed * enabled);
-            });
-
-            midi.sendShortMsg(padLedStatusWithBase, padMidiNo, Deck.hotcueGreen);
-            midi.sendShortMsg(padLedStatusWithBase, shiftedpadMidiNo, Deck.hotcueDeleteRed);
-        } */
+        }
 
         // Load track
         this.controls.push(new DeckButton(this.index, "Load", {
@@ -201,11 +210,13 @@ export class Deck {
                 engine.softTakeoverIgnoreNextValue(`[Channel${Deck.partnerDecks[]}]`, "rate");
             }
         })); */
-/* 
-        this.makeLedConnection("play", 0x0B);
-        this.makeLedConnection("pfl", 0x54);
-        this.makeLedConnection("quantize", 0x1A);
-        this.makeLedConnection("loop_enabled", 0x14); */
+
+        // Leds
+        this.makeLedConnection("play", "Play");
+        this.makeLedConnection("pfl", "Pfl");
+        this.makeLedConnection("hotcue_1_enabled", "Hotcue0");
+        this.makeLedConnection("hotcue_2_enabled", "Hotcue1");
+        this.makeLedConnection("loop_enabled", "Hotcue3");
 
         this.triggerConnections();
     }
@@ -248,7 +259,8 @@ export class Deck {
         this.connections.push(engine.makeConnection(this.group, key, callback));
     }
 
-/*     private makeLedConnection(key: string, midiLedNo: number) {
-        this.connections.push(makeLedConnection(this.group, key, this.deckStatus, midiLedNo));
-    } */
+    private makeLedConnection(key: string, controlName: string) {
+        const [status, midiNo] = MidiMapping.getMidiForControl(`${this.index}${controlName}`);
+        this.connections.push(makeLedConnection(this.group, key, status, midiNo));
+    }
 }

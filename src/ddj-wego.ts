@@ -3,14 +3,18 @@ import { Deck } from "@/deck";
 import { FineMidiControl } from "@controls/fineMidiControl";
 import { log, toggleControl, activate, makeLedConnection } from "@/utils";
 import { MidiControl } from "./controls/midiControl";
-import { MidiToNameMapping } from "./midiToNameMapping";
+import { MidiMapping } from "./midiMapping";
 
-const decks = [1, 2, 3, 4].map(channel => new Deck(channel));
+let decks: Deck[];
 let deckIndependentControls: MidiControl[];
 
 let controls: MidiControl[] = [];
 
 export function init(): void {
+    
+    MidiMapping.initReversedMapping();
+
+    decks = [1, 2, 3, 4].map(channel => new Deck(channel));
 
     deckIndependentControls = [
         new FineMidiControl("Crossfader", {
@@ -83,7 +87,7 @@ export function init(): void {
 export function midiInput(channel: number, midiNo: number, value: number, status: number, group: string): void {
     engine.log(`Channel ${channel}, MidiNo: ${midiNo}, Value: ${value}, Status: ${status}, Group: ${group}`);
 
-    const controlName = MidiToNameMapping.mapping[status][midiNo];
+    const controlName = MidiMapping.mapping[status][midiNo];
     if (controlName == null) return;
     engine.log(controlName);
 

@@ -1,4 +1,4 @@
-export class MidiToNameMapping {
+export class MidiMapping {
     private constructor() { }
 
     public static mapping: Record<number, Record<number, string>> = {
@@ -237,4 +237,20 @@ export class MidiToNameMapping {
             0x27: "3JogEncoderTouchShifted"
         }
     };
+
+    private static reversedMapping: Record<string, [number, number]> = {};
+
+    public static initReversedMapping() {
+        for (const statusGroupKey in MidiMapping.mapping) {
+            const statusGroup = MidiMapping.mapping[statusGroupKey];
+            for (const midiNo in statusGroup) {
+                const controlName = statusGroup[midiNo];
+                MidiMapping.reversedMapping[controlName] = [statusGroupKey as unknown as number, midiNo as unknown as number]; // idk
+            }
+        }
+    }
+
+    public static getMidiForControl(controlName: string): [number, number] {
+        return MidiMapping.reversedMapping[controlName];
+    }
 }
