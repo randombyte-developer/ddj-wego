@@ -4,6 +4,7 @@ import { FineMidiControl } from "@controls/fineMidiControl";
 import { log, toggleControl, activate, makeLedConnection } from "@/utils";
 import { MidiControl } from "./controls/midiControl";
 import { MidiMapping } from "./midiMapping";
+import { DeckButton } from "./controls/deckButton";
 
 let decks: Deck[];
 let deckIndependentControls: MidiControl[];
@@ -16,9 +17,12 @@ export function init(): void {
 
     decks = [1, 2, 3, 4].map(channel => new Deck(channel));
 
+    let ignoreCrossfader = true;
+
     deckIndependentControls = [
         new FineMidiControl("Crossfader", {
             onValueChanged: value => {
+                if (ignoreCrossfader) return;
                 engine.setParameter("[Master]", "crossfader", value);
             }
         }),
@@ -41,6 +45,13 @@ export function init(): void {
             onValueChanged: value => {
                 engine.setParameter("[Master]", "headMix", value);
             }
+        }),
+        // Center and ignore crossfader
+        new DeckButton(0, "SyncShifted", {
+            onPressed: () => {
+                engine.setParameter("[Master]", "crossfader", 0.5);
+                ignoreCrossfader = !ignoreCrossfader;
+            }
         })
     ];
 
@@ -55,26 +66,6 @@ export function init(): void {
     deckIndependentControls.push(traxControl("TraxEncoder", 1));
     deckIndependentControls.push(traxControl("TraxEncoderShifted", 5));
 
-/*     // Effects
-    for (const effectUnit of [1, 2]) {
-        for (const effectNumber of [1, 2, 3]) {
-            const group = `[EffectRack1_EffectUnit${effectUnit}_Effect${effectNumber}]`;
-
-            deckIndependentControls.push(new FineMidiControl(0xB3 + effectUnit, 0x00 + (effectNumber * 2), 0x20 + (effectNumber * 2), {
-                onValueChanged: value => {
-                    engine.setParameter(group, "meta", value);
-                }
-            }));
-            deckIndependentControls.push(new Button(0x93 + effectUnit, 0x46 + effectNumber, {
-                onPressed: () => {
-                    toggleControl(group, "enabled");
-                }
-            }));
-
-            makeLedConnection(group, "enabled", 0x93 + effectUnit, 0x46 + effectNumber);
-        }
-    } */
-
     registerControls(deckIndependentControls);
     for (const deck of decks) {
         registerControls(deck.controls);
@@ -85,11 +76,10 @@ export function init(): void {
 }
 
 export function midiInput(channel: number, midiNo: number, value: number, status: number, group: string): void {
-    engine.log(`Channel ${channel}, MidiNo: ${midiNo}, Value: ${value}, Status: ${status}, Group: ${group}`);
+    //engine.log(`Channel ${channel}, MidiNo: ${midiNo}, Value: ${value}, Status: ${status}, Group: ${group}`);
 
     const controlName = MidiMapping.mapping[status][midiNo];
     if (controlName == null) return;
-    engine.log(controlName);
 
     for (const control of controls) {
         control.offerValue(controlName, value);

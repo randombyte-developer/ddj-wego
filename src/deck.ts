@@ -201,15 +201,12 @@ export class Deck {
             }
         }));
 
-
         // SoftTakeover
-/*         engine.softTakeover(this.group, "rate", true);
-        // softTakeoverIgnoreNextValue when switching away from a deck
-        this.controls.push(new DeckButton(this.index, 0x72, {
-            onPressed: () => {
-                engine.softTakeoverIgnoreNextValue(`[Channel${Deck.partnerDecks[]}]`, "rate");
-            }
-        })); */
+        engine.softTakeover(this.group, "volume", true);
+        engine.softTakeover(this.group, "rate", true);
+        engine.softTakeover(eqGroup, "parameter1", true);
+        engine.softTakeover(eqGroup, "parameter2", true);
+        engine.softTakeover(eqGroup, "parameter3", true);
 
         // Leds
         this.makeLedConnection("play", "Play");
